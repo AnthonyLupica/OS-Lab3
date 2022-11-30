@@ -1,2 +1,2 @@
 # OS-Lab3
-Opertating Systems Lab3 - A Simple File System 
+Opertating Systems (Fall 2022) Lab 3 - A Simple File System 
