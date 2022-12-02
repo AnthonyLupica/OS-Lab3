@@ -6,7 +6,7 @@
 cmake_minimum_required(VERSION 3.10.2)
 
 # project info
-project(fileSys)
+project(filesys)
 
 # C++17 standard
 set(CMAKE_CXX_STANDARD 17)
@@ -15,7 +15,7 @@ set(CMAKE_CXX_STANDARD 17)
 set(SOURCE filesys.c)
 
 # convert application
-add_executable(fileSys ${SOURCE})
+add_executable(filesys ${SOURCE})
 
 # Turn on warnings
 if (MSVC)
@@ -29,8 +29,8 @@ endif()
 # run command
 add_custom_target(run
         COMMENT "Run"
-        COMMAND $<TARGET_FILE:fileSys>
-        DEPENDS fileSys
+        COMMAND $<TARGET_FILE:filesys>
+        DEPENDS filesys
         USES_TERMINAL
         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
 )
