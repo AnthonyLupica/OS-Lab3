@@ -49,6 +49,13 @@ void printFile(FILE *floppy, int sectorStart, int sectorCount);
 // recursive function to print large numbers with comma separators
 void commaSeparate(unsigned int n);
 
+// the function searches for a free directory. If one exists, a fileName entry is written
+// to the directory, along with file extension .t. It returns the offset of the free directory,
+// and -1 if there wasn't one
+int findFree(char dir[], char* fileName);
+
+void writeFile(int directoryOffset, char dir[], char map[], FILE *floppy);
+
 // total number of available bytes (considering both occupied/unoccupied sectors)
 const unsigned int TRACKED_BYTES = 261632;
 
@@ -150,16 +157,38 @@ int main(int argc, char* argv[])
 
 			printFile(floppy, sectorStart, sectorCount);
 			break;
+		case 'M':
+		case 'm':
+			if (argc != 3)
+			{
+				printf("A string of text must be provided for the create operation\n");
+				exit(1);
+			}
+
+			int directoryOffset = findFree(dir, argv[2]);
+
+            // a free directory entry was found 
+			if (directoryOffset != -1)
+			{
+				writeFile(directoryOffset, dir, map, floppy);
+			}
+			// insufficient disc space
+			else
+			{
+				printf("Insufficient disc space; no free directory entry was found\n");
+			}
+
+			break;
 	}
 
-/*
+
 	//write the map and directory back to the floppy image
     fseek(floppy,512*256,SEEK_SET);
     for (i=0; i<512; i++) fputc(map[i],floppy);
 
     fseek(floppy,512*257,SEEK_SET);
     for (i=0; i<512; i++) fputc(dir[i],floppy);
-*/
+
 	fclose(floppy);
 }
 
@@ -322,9 +351,122 @@ void printFile(FILE *floppy, int sectorStart, int sectorCount)
 		contents[i]=fgetc(floppy);
 	}
 
-    // @TODO for the purpose of the lab, this will do. But, if the file were especially
+    // @NOTE for the purpose of the lab, this will do. But, if the file were especially
 	//       long, it would be necessary to do additional formatting to keep things neat and tidy
 	printf("%s", contents);
 
 	return;
+}
+
+int findFree(char dir[], char* fileName)
+{
+	// this stores the file name of each sector, if there is one.
+	// Gets overwritten for each new sector that a valid file name is found.
+	char fileTemp[8] = {0}; 
+
+    // loop through to see if the file already exists
+	for (int i=0; i<512; i=i+16) 
+	{
+		if (dir[i]==0) break;
+
+		// zero out the temp string
+		memset(fileTemp, 0, 8); 
+
+		// loop through and look for the file name
+		for (int j=0, k=0; j<8; j++) 
+		{
+			if (dir[i+j]==0)
+			{
+				continue;
+			} 
+			else 
+			{
+				fileTemp[k] = (char) dir[i+j];
+				++k;
+			}
+		}
+		
+		// here, filetemp should contain the name of a valid file on disc
+		// compare fileTemp with fileName. strcmp(arg1, arg2) == 0 *means they compared equal
+		if (strcmp(fileTemp, fileName) == 0)
+		{
+			printf("Your request to create file '%s' could not be granted because it already exists\n", fileName);
+
+			exit(1);
+		}
+	}
+
+	// Now find a free a directory entry
+	for (int i=0; i<512; i=i+16) 
+	{
+		// this is an empty directory
+		if (dir[i]==0)
+		{
+			char tempString[] = "";
+
+			// if fileName is shorter than 8 characters, tempString fills to 8 with zeros
+			if (strlen(fileName) < 8)
+			{
+				strcpy(tempString, fileName);
+			}
+			// otherwise, only the first 8 characters of fileName are used 
+			else 
+			{
+				strncpy(tempString, fileName, 8);
+			}
+
+			// loop through this entry and write the filename
+			for (int j=0; j<8; j++)
+			{
+				dir[i+j] = tempString[j];
+			}
+
+            // write the file extension 
+			dir[i+8] == 't';
+
+			return i;
+		}
+	}
+
+    //  if we're here, not free directory entry was found 
+	return -1;
+}
+
+void writeFile(int directoryOffset, char dir[], char map[], FILE *floppy)
+{
+	// find a free sector on the disc by searching through the map for a zero
+	for (int i=0; i<16; i++) 
+	{
+		for (int j=0; j<16; j++) 
+		{
+			// -1 represents an occupied map space
+			if (map[16*i+j]!=-1) 
+			{
+				// set map entry to 255 (ff) to signal its taken 
+				map[16*i+j] = 255;
+
+				// add the starting sector number and length (1) to the file's directory entry
+				dir[directoryOffset + 9] = i + j;
+				dir[directoryOffset + 10] = 1;
+
+				// prompt and store text (512 bytes is the limit)
+				char textString[512] = "";
+				fgets(textString, sizeof(textString), stdin);
+				
+				// write the file 
+				fseek(floppy,512*(i + j),SEEK_SET);
+	
+				// storage capacity of sector is 512 bytes, and the file spans sectorCount sectors 
+				// --> i < sectorCount * 512
+				for(int i=0; i<512; i++)
+				{
+					fputc(textString[i], floppy);
+				}
+
+				return;
+			}
+		}
+	}
+
+	printf("Insufficient free sectors to write the file\n");
 }
