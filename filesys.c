@@ -54,7 +54,11 @@ void commaSeparate(unsigned int n);
 // and -1 if there wasn't one
 int findFree(char dir[], char* fileName);
 
+// A text string is prompted for and the file specified in findfree is 
+// created with the text string. The directory and map are updated.
 void writeFile(int directoryOffset, char dir[], char map[], FILE *floppy);
+
+void deleteFile(char dir[], char map[], char* fileName);
 
 // total number of available bytes (considering both occupied/unoccupied sectors)
 const unsigned int TRACKED_BYTES = 261632;
@@ -161,7 +165,7 @@ int main(int argc, char* argv[])
 		case 'm':
 			if (argc != 3)
 			{
-				printf("A string of text must be provided for the create operation\n");
+				printf("A file name must be provided for the make operation\n");
 				exit(1);
 			}
 
@@ -179,6 +183,15 @@ int main(int argc, char* argv[])
 			}
 
 			break;
+		case 'D':
+		case 'd':
+			if (argc != 3)
+			{
+				printf("A filename must be provided for the delete operation\n");
+				exit(1);
+			}
+
+			deleteFile(dir, map, argv[2]);
 	}
 
 
@@ -402,7 +415,7 @@ int findFree(char dir[], char* fileName)
 		// this is an empty directory
 		if (dir[i]==0)
 		{
-			char tempString[] = "";
+			char tempString[8] = {'\0', '\0', '\0', '\0', '\0', '\0', '\0', '\0'};
 
 			// if fileName is shorter than 8 characters, tempString fills to 8 with zeros
 			if (strlen(fileName) < 8)
@@ -418,6 +431,7 @@ int findFree(char dir[], char* fileName)
 			// loop through this entry and write the filename
 			for (int j=0; j<8; j++)
 			{
+				printf("%c ", tempString[j]);
 				dir[i+j] = tempString[j];
 			}
 
@@ -445,12 +459,17 @@ void writeFile(int directoryOffset, char dir[], char map[], FILE *floppy)
 				// set map entry to 255 (ff) to signal its taken 
 				map[16*i+j] = 255;
 
+                // add the file extension
+				dir[directoryOffset + 8] = 't';
+
 				// add the starting sector number and length (1) to the file's directory entry
 				dir[directoryOffset + 9] = i + j;
 				dir[directoryOffset + 10] = 1;
 
 				// prompt and store text (512 bytes is the limit)
 				char textString[512] = "";
+
+				printf("Enter text for the contents of the file >> ");
 				fgets(textString, sizeof(textString), stdin);
 				
 				// write the file 
@@ -469,4 +488,77 @@ void writeFile(int directoryOffset, char dir[], char map[], FILE *floppy)
 	}
 
 	printf("Insufficient free sectors to write the file\n");
+}
+
+void deleteFile(char dir[], char map[], char* fileName)
+{
+	// find the file in the directory and delete it if it exists
+
+	// this stores the file name of each sector, if there is one.
+	// Gets overwritten for each new sector that a valid file name is found.
+	char fileTemp[8] = {0};  
+	int isFound = 0;
+
+	int directoryOffset = 0;
+	int sectorStart = 0;
+	int sectorCount = 0;
+
+    // loop through to see if this file even exists
+	for (int i=0; i<512; i=i+16) 
+	{
+		if (dir[i]==0) break;
+
+		// zero out the temp string
+		memset(fileTemp, 0, 8); 
+
+		// loop through and look for the file name
+		for (int j=0, k=0; j<8; j++) 
+		{
+			if (dir[i+j]==0)
+			{
+				continue;
+			} 
+			else 
+			{
+				fileTemp[k] = (char) dir[i+j];
+				++k;
+			}
+		}
+		
+		// here, filetemp should contain the name of a valid file on disc
+		// compare fileTemp with fileName. strcmp(arg1, arg2) == 0 *means they compared equal
+		if (strcmp(fileTemp, fileName) == 0)
+		{
+			// a match!
+			isFound = 1;
+
+			// set the first byte of the name to 0 to erase it from the directory
+			dir[i] = 0;
+
+            // store the starting sector and file length
+			directoryOffset = i;
+			sectorStart = dir[i + 9];
+			sectorCount = dir[i + 10];
+
+			break;
+		}
+	}
+
+	if (!isFound)
+	{
+		printf("Your request to delete file '%s' could not be granted because it does not exist\n", fileName);
+		exit(1);
+	}
+
+	// we have verified that the file exists, proceed to delete
+
+    // delete the map sectors that belong to the file
+	int deleteCount = 0;
+	while(deleteCount < sectorCount)
+	{
+		map[16*sectorStart + deleteCount];
+        ++deleteCount;
+	}
+
+	printf("'%s' has been successfully deleted\n", fileName);
 }
