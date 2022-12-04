@@ -431,7 +431,6 @@ int findFree(char dir[], char* fileName)
 			// loop through this entry and write the filename
 			for (int j=0; j<8; j++)
 			{
-				printf("%c ", tempString[j]);
 				dir[i+j] = tempString[j];
 			}
 
